@@ -30,6 +30,7 @@ function mapMovie(tmdbMovie: any, genres: { movie: Record<number, string>; tv: R
     type: tmdbMovie.media_type || (isTV ? 'series' : 'movie'),
     description: tmdbMovie.overview,
     year: (tmdbMovie.release_date || tmdbMovie.first_air_date || '').slice(0, 4),
+    rating: tmdbMovie.vote_average,
     genres: (tmdbMovie.genre_ids || []).map((id: number) => genreMap[id]).filter(Boolean),
     streaming: [], // To be filled in details endpoint
   };

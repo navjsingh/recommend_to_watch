@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import MovieCard from '../components/MovieCard';
 
 interface Movie {
@@ -13,16 +13,52 @@ interface Movie {
 export default function HomePage() {
   const [query, setQuery] = useState('');
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const loader = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  // Fetch movies
+  const fetchMovies = useCallback(async (reset = false, pageNum = 1) => {
     setLoading(true);
-    const endpoint = query ? `/api/movies?q=${encodeURIComponent(query)}` : '/api/recommendations';
-    fetch(endpoint)
-      .then(res => res.json())
-      .then(setMovies)
-      .finally(() => setLoading(false));
+    const endpoint = query
+      ? `/api/movies?q=${encodeURIComponent(query)}&page=${pageNum}`
+      : `/api/movies?page=${pageNum}`;
+    const res = await fetch(endpoint);
+    const data = await res.json();
+    setMovies(prev => reset ? data.results : [...prev, ...data.results]);
+    setTotalPages(data.total_pages);
+    setLoading(false);
   }, [query]);
+
+  // Initial and query change fetch
+  useEffect(() => {
+    setPage(1);
+    fetchMovies(true, 1);
+  }, [query, fetchMovies]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (loading) return;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && page < totalPages) {
+          setPage(prev => prev + 1);
+        }
+      },
+      { threshold: 1 }
+    );
+    if (loader.current) observer.observe(loader.current);
+    return () => {
+      if (loader.current) observer.unobserve(loader.current);
+    };
+  }, [loading, page, totalPages]);
+
+  // Fetch next page
+  useEffect(() => {
+    if (page === 1) return;
+    fetchMovies(false, page);
+  }, [page, fetchMovies]);
 
   return (
     <main className="p-8">
@@ -35,15 +71,15 @@ export default function HomePage() {
         />
       </form>
       <h1 className="text-2xl font-bold mb-4">Recommended for You</h1>
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-          {movies.map(movie => (
-            <MovieCard key={movie.id} {...movie} />
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+        {movies.map(movie => (
+          <MovieCard key={`${movie.id}-${movie.type}`} {...movie} />
+        ))}
+      </div>
+      <div ref={loader} className="h-12 flex items-center justify-center">
+        {loading && <span>Loading...</span>}
+        {!loading && page >= totalPages && <span className="text-gray-400">No more results</span>}
+      </div>
     </main>
   );
 } 

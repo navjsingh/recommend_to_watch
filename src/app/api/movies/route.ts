@@ -1,88 +1,70 @@
 import { NextResponse } from 'next/server';
+import axios from 'axios';
 
-const movies = [
-  {
-    id: 1,
-    title: 'Inception',
-    image: '/images/inception.jpg',
-    type: 'movie',
-    description: 'A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea.',
-    year: 2010,
-    genres: ['Action', 'Sci-Fi', 'Thriller'],
-    streaming: [
-      { service: 'Netflix', url: 'https://www.netflix.com/title/70131314' },
-      { service: 'Prime', url: 'https://www.amazon.com/Inception-Leonardo-DiCaprio/dp/B003UYPRGE' }
-    ],
-  },
-  {
-    id: 2,
-    title: 'Stranger Things',
-    image: '/images/strangerthings.jpg',
-    type: 'series',
-    description: 'A group of young friends witness supernatural forces and secret government exploits in their small town.',
-    year: 2016,
-    genres: ['Drama', 'Fantasy', 'Horror'],
-    streaming: [
-      { service: 'Netflix', url: 'https://www.netflix.com/title/8057281' }
-    ],
-  },
-  {
-    id: 3,
-    title: 'The Dark Knight',
-    image: '/images/darkknight.jpg',
-    type: 'movie',
-    description: 'Batman faces the Joker, a criminal mastermind who wants to plunge Gotham City into anarchy.',
-    year: 2008,
-    genres: ['Action', 'Crime', 'Drama'],
-    streaming: [
-      { service: 'Prime', url: 'https://www.amazon.com/Dark-Knight-Christian-Bale/dp/B001F7AJSE' }
-    ],
-  },
-  {
-    id: 4,
-    title: 'Breaking Bad',
-    image: '/images/breakingbad.jpg',
-    type: 'series',
-    description: 'A high school chemistry teacher turned methamphetamine producer navigates the dangers of the criminal underworld.',
-    year: 2008,
-    genres: ['Crime', 'Drama', 'Thriller'],
-    streaming: [
-      { service: 'Netflix', url: 'https://www.netflix.com/title/70143836' }
-    ],
-  },
-  {
-    id: 5,
-    title: 'Interstellar',
-    image: '/images/interstellar.jpg',
-    type: 'movie',
-    description: 'A team of explorers travel through a wormhole in space in an attempt to ensure humanity’s survival.',
-    year: 2014,
-    genres: ['Adventure', 'Drama', 'Sci-Fi'],
-    streaming: [
-      { service: 'Prime', url: 'https://www.amazon.com/Interstellar-Matthew-McConaughey/dp/B00TU9UFTS' }
-    ],
-  },
-  {
-    id: 6,
-    title: 'Money Heist',
-    image: '/images/moneyheist.jpg',
-    type: 'series',
-    description: 'A criminal mastermind plans the biggest heist in recorded history.',
-    year: 2017,
-    genres: ['Action', 'Crime', 'Mystery'],
-    streaming: [
-      { service: 'Netflix', url: 'https://www.netflix.com/title/80192098' }
-    ],
-  },
-  // Add more movies/series as needed
-];
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+let genreCache: { movie: Record<number, string>; tv: Record<number, string> } | null = null;
+
+async function getGenres() {
+  if (genreCache) return genreCache;
+  const [movieRes, tvRes] = await Promise.all([
+    axios.get(`${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}`),
+    axios.get(`${TMDB_BASE_URL}/genre/tv/list?api_key=${TMDB_API_KEY}`),
+  ]);
+  genreCache = {
+    movie: Object.fromEntries(movieRes.data.genres.map((g: any) => [g.id, g.name])),
+    tv: Object.fromEntries(tvRes.data.genres.map((g: any) => [g.id, g.name])),
+  };
+  return genreCache;
+}
+
+function mapMovie(tmdbMovie: any, genres: { movie: Record<number, string>; tv: Record<number, string> }) {
+  const isTV = !!tmdbMovie.first_air_date;
+  const genreMap = isTV ? genres.tv : genres.movie;
+  return {
+    id: tmdbMovie.id,
+    title: tmdbMovie.title || tmdbMovie.name,
+    image: tmdbMovie.poster_path ? TMDB_IMAGE_BASE + tmdbMovie.poster_path : '',
+    type: tmdbMovie.media_type || (isTV ? 'series' : 'movie'),
+    description: tmdbMovie.overview,
+    year: (tmdbMovie.release_date || tmdbMovie.first_air_date || '').slice(0, 4),
+    genres: (tmdbMovie.genre_ids || []).map((id: number) => genreMap[id]).filter(Boolean),
+    streaming: [], // To be filled in details endpoint
+  };
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const query = searchParams.get('q');
-  let results = movies;
+  const page = searchParams.get('page') || '1';
+
+  let tmdbUrl = '';
   if (query) {
-    results = movies.filter(m => m.title.toLowerCase().includes(query.toLowerCase()));
+    tmdbUrl = `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}`;
+  } else {
+    tmdbUrl = `${TMDB_BASE_URL}/trending/all/week?api_key=${TMDB_API_KEY}&page=${page}`;
   }
-  return NextResponse.json(results);
+
+  try {
+    const genres = await getGenres();
+    const res = await axios.get(tmdbUrl);
+    const results = res.data.results
+      .filter((m: any) => m.media_type !== 'person')
+      .map((m: any) => mapMovie(m, genres));
+
+    // Deduplicate by id+type
+    const seen = new Set();
+    const uniqueResults = results.filter((item: any) => {
+      const key = `${item.id}-${item.type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return NextResponse.json({ results: uniqueResults, page: res.data.page, total_pages: res.data.total_pages });
+  } catch (err) {
+    return NextResponse.json({ error: 'Failed to fetch from TMDb' }, { status: 500 });
+  }
 } 

@@ -13,13 +13,19 @@ export default function MovieCard({ id, title, image, type }: MovieCardProps) {
   return (
     <Link href={`/details?id=${id}`} className="block group relative rounded-lg overflow-hidden shadow-lg hover:scale-105 hover:shadow-2xl transition-transform duration-200">
       <div className="relative w-full aspect-[2/3] bg-gray-200">
-        <Image
-          src={image}
-          alt={title}
-          fill
-          className="object-cover object-center group-hover:brightness-75 transition duration-200"
-          sizes="(max-width: 768px) 100vw, 33vw"
-        />
+        {image ? (
+          <Image
+            src={image}
+            alt={title}
+            fill
+            className="object-cover object-center group-hover:brightness-75 transition duration-200"
+            sizes="(max-width: 768px) 100vw, 33vw"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-400 text-2xl">
+            No Image
+          </div>
+        )}
         <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <span className="text-white text-lg font-semibold p-4 w-full truncate" title={title}>{title}</span>
         </div>

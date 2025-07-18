@@ -12,6 +12,12 @@ interface CastMember {
   profile: string;
 }
 
+interface Provider {
+  service: string;
+  logo: string;
+  url: string;
+}
+
 interface Movie {
   id: number;
   title: string;
@@ -22,33 +28,38 @@ interface Movie {
   genres: string[];
   runtime?: number;
   cast: CastMember[];
-  streaming: { service: string; logo: string; url: string }[];
+  streaming: Provider[];
 }
 
 export default function DetailsPage() {
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
+  const type = searchParams.get('type') || 'movie';
   const [movie, setMovie] = useState<Movie | null>(null);
-  const [interaction, setInteraction] = useState<{ liked: boolean; watched: boolean } | null>(null);
+  const [interaction, setInteraction] = useState<{ liked: boolean } | null>(null);
 
   useEffect(() => {
-    if (id) {
-      // Try both movie and tv
-      fetch(`/api/movies/${id}?type=movie`)
+    if (id && type) {
+      fetch(`/api/movies/${id}?type=${type}`)
         .then(res => res.json())
-        .then(data => {
-          if (data && data.title) setMovie(data);
-          else {
-            fetch(`/api/movies/${id}?type=tv`)
-              .then(res => res.json())
-              .then(data2 => setMovie(data2));
-          }
-        });
+        .then(data => setMovie(data));
       fetch(`/api/interaction?userId=demo&movieId=${id}`)
         .then(res => res.json())
         .then(data => setInteraction(data));
     }
-  }, [id]);
+  }, [id, type]);
+
+  const updateInteraction = async (liked: boolean | null) => {
+    const newState = {
+      liked: liked !== null ? liked : interaction?.liked || false,
+    };
+    setInteraction(newState);
+    await fetch('/api/interaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'demo', movieId: movie?.id, ...newState }),
+    });
+  };
 
   if (!id) return <div className="p-8">No movie/series selected.</div>;
   if (!movie) return <div className="p-8">Loading...</div>;
@@ -67,10 +78,15 @@ export default function DetailsPage() {
         </div>
         <div className="flex-1">
           <h1 className="text-3xl font-bold mb-2">{movie.title}</h1>
-          <div className="mb-2 text-gray-500">{movie.type} &bull; {movie.year} {movie.runtime && <> &bull; {movie.runtime} min</>}</div>
+          <div className="mb-2 text-gray-500">
+            <span className="inline-block bg-black/60 text-white px-2 py-0.5 rounded-full text-xs font-semibold mr-2">
+              {movie.type.toUpperCase()}
+            </span>
+            {movie.year} {movie.runtime && <> &bull; {movie.runtime} min</>}
+          </div>
           <div className="mb-2 flex flex-wrap gap-2">
             {movie.genres.map(g => (
-              <span key={g} className="bg-gray-100 px-2 py-1 rounded text-xs font-medium">{g}</span>
+              <span key={g} className="bg-black/60 text-white px-2 py-1 rounded text-xs font-medium shadow">{g}</span>
             ))}
           </div>
           <p className="mb-4 text-lg">{movie.description}</p>
@@ -78,27 +94,62 @@ export default function DetailsPage() {
             <span className="font-semibold">Available on: </span>
             <div className="flex flex-wrap gap-2 mt-2">
               {movie.streaming.length === 0 && <span className="text-gray-400">No streaming info</span>}
-              {movie.streaming.map(stream => (
-                <a
-                  key={stream.service}
-                  href={stream.url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center bg-gray-800 text-white px-3 py-1 rounded hover:bg-gray-700 transition-colors"
-                >
-                  {stream.logo && <Image src={stream.logo} alt={stream.service} width={24} height={24} className="inline mr-1 rounded" />}
-                  Watch on {stream.service}
-                </a>
-              ))}
+              {movie.streaming.map(stream => {
+                let providerUrl = '';
+                if (movie.title) {
+                  if (stream.service.toLowerCase().includes('netflix')) {
+                    providerUrl = `https://www.netflix.com/search?q=${encodeURIComponent(movie.title)}`;
+                  } else if (stream.service.toLowerCase().includes('prime')) {
+                    providerUrl = `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(movie.title)}`;
+                  } else if (stream.service.toLowerCase().includes('disney')) {
+                    providerUrl = `https://www.disneyplus.com/search?q=${encodeURIComponent(movie.title)}`;
+                  } else if (stream.service.toLowerCase().includes('hulu')) {
+                    providerUrl = `https://www.hulu.com/search?q=${encodeURIComponent(movie.title)}`;
+                  } else {
+                    providerUrl = stream.url || '#';
+                  }
+                }
+                return (
+                  <a
+                    key={stream.service}
+                    href={providerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-900 text-white font-medium shadow hover:bg-gray-700 transition-colors border border-gray-800"
+                    style={{ minWidth: 0 }}
+                  >
+                    {stream.logo && <Image src={stream.logo} alt={stream.service} width={24} height={24} className="inline rounded-full" />}
+                    <span className="truncate max-w-[100px]">{stream.service}</span>
+                  </a>
+                );
+              })}
             </div>
           </div>
-          <LikeWatchedButtons
-            userId="demo"
-            movieId={movie.id}
-            liked={interaction?.liked}
-            watched={interaction?.watched}
-            onChange={setInteraction}
-          />
+          {/* Like/Dislike buttons, modern style */}
+          <div className="flex gap-4 mt-6">
+            <button
+              className={`text-2xl text-green-500 ${interaction?.liked ? 'scale-110' : ''} hover:scale-125 transition cursor-pointer bg-black/70 rounded-full p-2`}
+              title="Like"
+              onClick={() => updateInteraction(true)}
+              type="button"
+              style={{ lineHeight: 1 }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7 22V9.24l7.29-7.29c.63-.63 1.71-.18 1.71.71V7h3c1.1 0 2 .9 2 2v2c0 .55-.45 1-1 1h-7.31l.95 8.55c.09.81-.54 1.45-1.35 1.45H7z" fill="currentColor"/>
+              </svg>
+            </button>
+            <button
+              className={`text-2xl text-red-500 ${interaction?.liked === false ? 'scale-110' : ''} hover:scale-125 transition cursor-pointer bg-black/70 rounded-full p-2`}
+              title="Dislike"
+              onClick={() => updateInteraction(false)}
+              type="button"
+              style={{ lineHeight: 1 }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17 2v12.76l-7.29 7.29c-.63.63-1.71.18-1.71-.71V17H5c-1.1 0-2-.9-2-2v-2c0-.55.45-1 1-1h7.31l-.95-8.55C10.27 2.64 10.9 2 11.71 2H17z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       {movie.cast && movie.cast.length > 0 && (

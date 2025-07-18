@@ -18,10 +18,11 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
   const [interaction, setInteraction] = useState<{ liked: boolean } | null>(null);
 
   useEffect(() => {
-    fetch(`/api/interaction?userId=demo&movieId=${id}`)
+    if (!session) return;
+    fetch(`/api/interaction?movieId=${id}`)
       .then(res => res.json())
       .then(data => setInteraction(data));
-  }, [id]);
+  }, [id, session]);
 
   const updateInteraction = async (liked: boolean | null) => {
     if (!session) {
@@ -35,7 +36,7 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
     await fetch('/api/interaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'demo', movieId: id, ...newState }),
+      body: JSON.stringify({ movieId: id, liked: newState.liked }),
     });
   };
 

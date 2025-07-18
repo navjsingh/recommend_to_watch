@@ -26,7 +26,16 @@ export default function HomePage() {
       : `/api/movies?page=${pageNum}`;
     const res = await fetch(endpoint);
     const data = await res.json();
-    setMovies(prev => reset ? data.results : [...prev, ...data.results]);
+    setMovies(prev => {
+      const all = reset ? data.results : [...prev, ...data.results];
+      const seen = new Set();
+      return all.filter((item: any) => {
+        const key = `${item.id}-${item.type}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    });
     setTotalPages(data.total_pages);
     setLoading(false);
   }, [query]);

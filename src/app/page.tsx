@@ -1,7 +1,8 @@
 "use client";
-
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import MovieCard from '../components/MovieCard';
+import { SessionProvider, useSession, signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface Movie {
   id: number;
@@ -11,6 +12,16 @@ interface Movie {
 }
 
 export default function HomePage() {
+  return (
+    <SessionProvider>
+      <HomePageContent />
+    </SessionProvider>
+  );
+}
+
+function HomePageContent() {
+  const { data: session } = useSession();
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [movies, setMovies] = useState<Movie[]>([]);
   const [page, setPage] = useState(1);
@@ -71,6 +82,21 @@ export default function HomePage() {
 
   return (
     <main className="p-8">
+      {!session && (
+        <div className="mb-6 p-4 bg-blue-100 border border-blue-300 rounded flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span className="text-blue-900 font-medium">Register or Sign in for personalized recommendations!</span>
+          <div className="flex gap-2">
+            <button
+              className="bg-gray-900 text-white px-4 py-1 rounded font-semibold hover:bg-gray-700 transition"
+              onClick={() => router.push('/auth/register')}
+            >Register</button>
+            <button
+              className="bg-white border border-gray-900 text-gray-900 px-4 py-1 rounded font-semibold hover:bg-gray-100 transition"
+              onClick={() => signIn()}
+            >Sign In</button>
+          </div>
+        </div>
+      )}
       <form className="mb-6" onSubmit={e => { e.preventDefault(); }}>
         <input
           className="border rounded p-2 w-full max-w-md"

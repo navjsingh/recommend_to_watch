@@ -1,6 +1,8 @@
+"use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSession, signIn } from 'next-auth/react';
 
 interface MovieCardProps {
   id: number;
@@ -12,6 +14,7 @@ interface MovieCardProps {
 }
 
 export default function MovieCard({ id, title, image, type, year, rating }: MovieCardProps) {
+  const { data: session } = useSession();
   const [interaction, setInteraction] = useState<{ liked: boolean } | null>(null);
 
   useEffect(() => {
@@ -21,6 +24,10 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
   }, [id]);
 
   const updateInteraction = async (liked: boolean | null) => {
+    if (!session) {
+      signIn();
+      return;
+    }
     const newState = {
       liked: liked !== null ? liked : interaction?.liked || false,
     };

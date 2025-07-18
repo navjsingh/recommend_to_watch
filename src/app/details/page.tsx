@@ -34,27 +34,20 @@ interface Movie {
 export default function DetailsPage() {
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
+  const type = searchParams.get('type') || 'movie';
   const [movie, setMovie] = useState<Movie | null>(null);
   const [interaction, setInteraction] = useState<{ liked: boolean } | null>(null);
 
   useEffect(() => {
-    if (id) {
-      // Try both movie and tv
-      fetch(`/api/movies/${id}?type=movie`)
+    if (id && type) {
+      fetch(`/api/movies/${id}?type=${type}`)
         .then(res => res.json())
-        .then(data => {
-          if (data && data.title) setMovie(data);
-          else {
-            fetch(`/api/movies/${id}?type=tv`)
-              .then(res => res.json())
-              .then(data2 => setMovie(data2));
-          }
-        });
+        .then(data => setMovie(data));
       fetch(`/api/interaction?userId=demo&movieId=${id}`)
         .then(res => res.json())
         .then(data => setInteraction(data));
     }
-  }, [id]);
+  }, [id, type]);
 
   const updateInteraction = async (liked: boolean | null) => {
     const newState = {

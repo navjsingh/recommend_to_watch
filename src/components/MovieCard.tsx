@@ -34,7 +34,7 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
 
   return (
     <div className="group relative rounded-lg overflow-hidden shadow-lg hover:scale-105 hover:shadow-2xl transition-transform duration-200">
-      <Link href={`/details?id=${id}`} className="block">
+      <Link href={`/details?id=${id}&type=${type}`} className="block">
         <div className="relative w-full aspect-[2/3] bg-gray-200">
           {image ? (
             <Image

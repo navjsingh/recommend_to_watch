@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import MovieCard from '../components/MovieCard';
-import { SessionProvider, useSession, signIn } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 interface Movie {
@@ -12,14 +12,6 @@ interface Movie {
 }
 
 export default function HomePage() {
-  return (
-    <SessionProvider>
-      <HomePageContent />
-    </SessionProvider>
-  );
-}
-
-function HomePageContent() {
   const { data: session } = useSession();
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -88,7 +80,7 @@ function HomePageContent() {
           <div className="flex gap-2">
             <button
               className="bg-gray-900 text-white px-4 py-1 rounded font-semibold hover:bg-gray-700 transition"
-              onClick={() => router.push('/auth/register')}
+              onClick={() => router.push('/auth/signup')}
             >Register</button>
             <button
               className="bg-white border border-gray-900 text-gray-900 px-4 py-1 rounded font-semibold hover:bg-gray-100 transition"

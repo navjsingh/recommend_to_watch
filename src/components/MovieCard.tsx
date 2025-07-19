@@ -16,12 +16,20 @@ interface MovieCardProps {
 export default function MovieCard({ id, title, image, type, year, rating }: MovieCardProps) {
   const { data: session } = useSession();
   const [interaction, setInteraction] = useState<{ liked: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
+    console.log(`Fetching interaction for movie ${id}`);
     fetch(`/api/interaction?movieId=${id}`)
       .then(res => res.json())
-      .then(data => setInteraction(data));
+      .then(data => {
+        console.log(`Interaction data for movie ${id}:`, data);
+        setInteraction(data);
+      })
+      .catch(error => {
+        console.error(`Error fetching interaction for movie ${id}:`, error);
+      });
   }, [id, session]);
 
   const updateInteraction = async (liked: boolean | null) => {
@@ -29,15 +37,50 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
       signIn();
       return;
     }
+    
+    console.log(`Updating interaction for movie ${id} to liked: ${liked}`);
+    
     const newState = {
       liked: liked !== null ? liked : interaction?.liked || false,
     };
     setInteraction(newState);
-    await fetch('/api/interaction', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movieId: id, liked: newState.liked }),
-    });
+    
+    // Show feedback
+    setFeedback(liked ? 'Added to Likes' : 'Added to Dislikes');
+    
+    // Hide feedback after 2 seconds
+    setTimeout(() => setFeedback(null), 2000);
+    
+    try {
+      const response = await fetch('/api/interaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movieId: id, liked: newState.liked }),
+      });
+      
+      const result = await response.json();
+      console.log(`API response for movie ${id}:`, result);
+      
+      if (!response.ok) {
+        console.error(`Error saving interaction for movie ${id}:`, result);
+        // Show error feedback
+        setFeedback(`Error: ${result.error || 'Failed to save'}`);
+        setTimeout(() => setFeedback(null), 3000);
+        // Revert the state if there was an error
+        setInteraction(interaction);
+      } else {
+        // Show success feedback
+        setFeedback(liked ? 'Added to Likes!' : 'Added to Dislikes!');
+        setTimeout(() => setFeedback(null), 2000);
+      }
+    } catch (error) {
+      console.error(`Network error saving interaction for movie ${id}:`, error);
+      // Show error feedback
+      setFeedback('Network error - please try again');
+      setTimeout(() => setFeedback(null), 3000);
+      // Revert the state if there was an error
+      setInteraction(interaction);
+    }
   };
 
   return (
@@ -94,6 +137,19 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
               </svg>
             </button>
           </div>
+          
+          {/* Feedback overlay */}
+          {feedback && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
+              <div className={`px-4 py-2 rounded-lg font-semibold text-sm shadow-lg animate-pulse ${
+                feedback.includes('Error') || feedback.includes('Network error') 
+                  ? 'bg-red-500 text-white' 
+                  : 'bg-white text-gray-800'
+              }`}>
+                {feedback}
+              </div>
+            </div>
+          )}
         </div>
       </Link>
     </div>

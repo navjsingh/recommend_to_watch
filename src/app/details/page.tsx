@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import LikeWatchedButtons from '../../components/LikeWatchedButtons';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 
 interface CastMember {
@@ -32,24 +32,34 @@ interface Movie {
 }
 
 export default function DetailsPage() {
+  const { data: session } = useSession();
   const searchParams = useSearchParams();
-  const id = searchParams.get('id');
-  const type = searchParams.get('type') || 'movie';
+  const id = searchParams?.get('id');
+  const type = searchParams?.get('type') || 'movie';
   const [movie, setMovie] = useState<Movie | null>(null);
   const [interaction, setInteraction] = useState<{ liked: boolean } | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   useEffect(() => {
     if (id && type) {
       fetch(`/api/movies/${id}?type=${type}`)
         .then(res => res.json())
         .then(data => setMovie(data));
-      fetch(`/api/interaction?userId=demo&movieId=${id}`)
-        .then(res => res.json())
-        .then(data => setInteraction(data));
+      
+      if (session) {
+        fetch(`/api/interaction?movieId=${id}`)
+          .then(res => res.json())
+          .then(data => setInteraction(data));
+      }
     }
-  }, [id, type]);
+  }, [id, type, session]);
 
   const updateInteraction = async (liked: boolean | null) => {
+    if (!session) {
+      // Handle not authenticated
+      return;
+    }
+
     const newState = {
       liked: liked !== null ? liked : interaction?.liked || false,
     };
@@ -57,8 +67,27 @@ export default function DetailsPage() {
     await fetch('/api/interaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'demo', movieId: movie?.id, ...newState }),
+      body: JSON.stringify({ movieId: movie?.id, liked: newState.liked }),
     });
+  };
+
+  const removeInteraction = async () => {
+    if (!session || !movie) return;
+    
+    setIsRemoving(true);
+    try {
+      const response = await fetch(`/api/interaction?movieId=${movie.id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setInteraction(null);
+      }
+    } catch (error) {
+      console.error('Error removing interaction:', error);
+    } finally {
+      setIsRemoving(false);
+    }
   };
 
   if (!id) return <div className="p-8">No movie/series selected.</div>;
@@ -125,30 +154,74 @@ export default function DetailsPage() {
               })}
             </div>
           </div>
-          {/* Like/Dislike buttons, modern style */}
-          <div className="flex gap-4 mt-6">
-            <button
-              className={`text-2xl text-green-500 ${interaction?.liked ? 'scale-110' : ''} hover:scale-125 transition cursor-pointer bg-black/70 rounded-full p-2`}
-              title="Like"
-              onClick={() => updateInteraction(true)}
-              type="button"
-              style={{ lineHeight: 1 }}
-            >
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="" xmlns="http://www.w3.org/2000/svg">
-                <path d="M7 22V9.24l7.29-7.29c.63-.63 1.71-.18 1.71.71V7h3c1.1 0 2 .9 2 2v2c0 .55-.45 1-1 1h-7.31l.95 8.55c.09.81-.54 1.45-1.35 1.45H7z" fill="currentColor"/>
-              </svg>
-            </button>
-            <button
-              className={`text-2xl text-red-500 ${interaction?.liked === false ? 'scale-110' : ''} hover:scale-125 transition cursor-pointer bg-black/70 rounded-full p-2`}
-              title="Dislike"
-              onClick={() => updateInteraction(false)}
-              type="button"
-              style={{ lineHeight: 1 }}
-            >
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17 2v12.76l-7.29 7.29c-.63.63-1.71.18-1.71-.71V17H5c-1.1 0-2-.9-2-2v-2c0-.55.45-1 1-1h7.31l-.95-8.55C10.27 2.64 10.9 2 11.71 2H17z" fill="currentColor"/>
-              </svg>
-            </button>
+          
+          {/* Interaction Section */}
+          <div className="mt-6">
+            {session ? (
+              interaction ? (
+                // Show current status and remove option
+                <div className="flex items-center gap-4">
+                  <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${
+                    interaction.liked 
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}>
+                    <span className="text-lg">
+                      {interaction.liked ? '❤️' : '👎'}
+                    </span>
+                    <span className="font-medium">
+                      {interaction.liked ? 'Liked' : 'Disliked'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={removeInteraction}
+                    disabled={isRemoving}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full transition-colors disabled:opacity-50"
+                  >
+                    {isRemoving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Removing...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/>
+                        </svg>
+                        Remove
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                // Show like/dislike options
+                <div className="flex gap-4">
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+                    onClick={() => updateInteraction(true)}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M7 22V9.24l7.29-7.29c.63-.63 1.71-.18 1.71.71V7h3c1.1 0 2 .9 2 2v2c0 .55-.45 1-1 1h-7.31l.95 8.55c.09.81-.54 1.45-1.35 1.45H7z" fill="currentColor"/>
+                    </svg>
+                    Like
+                  </button>
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                    onClick={() => updateInteraction(false)}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17 2v12.76l-7.29 7.29c-.63.63-1.71.18-1.71-.71V17H5c-1.1 0-2-.9-2-2v-2c0-.55.45-1 1-1h7.31l-.95-8.55C10.27 2.64 10.9 2 11.71 2H17z" fill="currentColor"/>
+                    </svg>
+                    Dislike
+                  </button>
+                </div>
+              )
+            ) : (
+              // Not authenticated
+              <div className="text-gray-500 text-sm">
+                Sign in to like or dislike this content
+              </div>
+            )}
           </div>
         </div>
       </div>

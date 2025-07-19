@@ -97,7 +97,17 @@ export default function HomePage() {
           onChange={e => setQuery(e.target.value)}
         />
       </form>
-      <h1 className="text-2xl font-bold mb-4">Recommended for You</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Discover Movies & TV Shows</h1>
+        {session && (
+          <button
+            onClick={() => router.push('/recommendations')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            View Personalized Recommendations
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
         {movies.map(movie => (
           <MovieCard key={`${movie.id}-${movie.type}`} {...movie} />

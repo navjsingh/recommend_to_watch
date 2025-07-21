@@ -55,7 +55,7 @@ export default function MovieCard({ id, title, image, type, year, rating }: Movi
       const response = await fetch('/api/interaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ movieId: id, liked: newState.liked }),
+        body: JSON.stringify({ movieId: id, liked: newState.liked, type }),
       });
       
       const result = await response.json();

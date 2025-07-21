@@ -21,13 +21,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!user) return res.status(401).json({ error: 'User not found' });
 
     if (req.method === 'POST') {
-      const { movieId, liked } = req.body;
-      console.log(`Interaction API - POST request for movie ${movieId}, liked: ${liked}`);
+      const { movieId, liked, type } = req.body;
+      console.log(`Interaction API - POST request for movie ${movieId}, liked: ${liked}, type: ${type}`);
       console.log('Interaction API - Request body:', req.body);
       
-      if (!movieId || typeof liked !== 'boolean') {
-        console.log('Interaction API - Missing fields:', { movieId, liked });
-        return res.status(400).json({ error: 'Missing fields', received: { movieId, liked } });
+      if (!movieId || typeof liked !== 'boolean' || (type !== 'movie' && type !== 'tv')) {
+        console.log('Interaction API - Missing fields:', { movieId, liked, type });
+        return res.status(400).json({ error: 'Missing fields', received: { movieId, liked, type } });
       }
       
       try {
@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (existing) {
           result = await prisma.interaction.update({ 
             where: { id: existing.id }, 
-            data: { liked } 
+            data: { liked, type } 
           });
           console.log('Interaction API - Updated existing interaction:', result);
         } else {
@@ -51,7 +51,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             data: { 
               userId: user.id, 
               movieId: String(movieId), 
-              liked 
+              liked, 
+              type
             } 
           });
           console.log('Interaction API - Created new interaction:', result);
@@ -114,6 +115,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
             orderBy: {
               createdAt: 'desc'
+            },
+            select: {
+              id: true,
+              userId: true,
+              movieId: true,
+              liked: true,
+              createdAt: true,
+              type: true
             }
           });
           
@@ -121,45 +130,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           
           // Fetch movie details for each liked interaction
           const likedMovies = await Promise.all(
-            likedInteractions.map(async (interaction) => {
+            likedInteractions.map(async (interaction: any) => {
               try {
-                // Fetch movie details from TMDb API
-                const movieRes = await fetch(
-                  `https://api.themoviedb.org/3/movie/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`
-                );
-                const movieData = await movieRes.json();
-                
-                if (movieData.success === false) {
-                  // Try TV series if movie not found
-                  const tvRes = await fetch(
-                    `https://api.themoviedb.org/3/tv/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`
-                  );
-                  const tvData = await tvRes.json();
-                  
-                  if (tvData.success === false) {
-                    return null;
-                  }
-                  
-                  return {
-                    id: parseInt(interaction.movieId),
-                    title: tvData.name,
-                    image: tvData.poster_path ? `https://image.tmdb.org/t/p/w500${tvData.poster_path}` : null,
-                    type: 'tv',
-                    year: tvData.first_air_date ? tvData.first_air_date.split('-')[0] : null,
-                    rating: tvData.vote_average
-                  };
+                // Fetch movie or TV details from TMDb API using stored type
+                let url;
+                if (interaction.type === 'movie') {
+                  url = `https://api.themoviedb.org/3/movie/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`;
+                } else {
+                  url = `https://api.themoviedb.org/3/tv/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`;
                 }
-                
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.success === false) return null;
                 return {
                   id: parseInt(interaction.movieId),
-                  title: movieData.title,
-                  image: movieData.poster_path ? `https://image.tmdb.org/t/p/w500${movieData.poster_path}` : null,
-                  type: 'movie',
-                  year: movieData.release_date ? movieData.release_date.split('-')[0] : null,
-                  rating: movieData.vote_average
+                  title: data.title || data.name,
+                  image: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
+                  type: interaction.type,
+                  year: (data.release_date || data.first_air_date || '').split('-')[0] || null,
+                  rating: data.vote_average
                 };
               } catch (error) {
-                console.error(`Error fetching movie ${interaction.movieId}:`, error);
+                console.error(`Error fetching ${interaction.type} ${interaction.movieId}:`, error);
                 return null;
               }
             })
@@ -180,6 +172,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
             orderBy: {
               createdAt: 'desc'
+            },
+            select: {
+              id: true,
+              userId: true,
+              movieId: true,
+              liked: true,
+              createdAt: true,
+              type: true
             }
           });
           
@@ -187,45 +187,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           
           // Fetch movie details for each disliked interaction
           const dislikedMovies = await Promise.all(
-            dislikedInteractions.map(async (interaction) => {
+            dislikedInteractions.map(async (interaction: any) => {
               try {
-                // Fetch movie details from TMDb API
-                const movieRes = await fetch(
-                  `https://api.themoviedb.org/3/movie/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`
-                );
-                const movieData = await movieRes.json();
-                
-                if (movieData.success === false) {
-                  // Try TV series if movie not found
-                  const tvRes = await fetch(
-                    `https://api.themoviedb.org/3/tv/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`
-                  );
-                  const tvData = await tvRes.json();
-                  
-                  if (tvData.success === false) {
-                    return null;
-                  }
-                  
-                  return {
-                    id: parseInt(interaction.movieId),
-                    title: tvData.name,
-                    image: tvData.poster_path ? `https://image.tmdb.org/t/p/w500${tvData.poster_path}` : null,
-                    type: 'tv',
-                    year: tvData.first_air_date ? tvData.first_air_date.split('-')[0] : null,
-                    rating: tvData.vote_average
-                  };
+                // Fetch movie or TV details from TMDb API using stored type
+                let url;
+                if (interaction.type === 'movie') {
+                  url = `https://api.themoviedb.org/3/movie/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`;
+                } else {
+                  url = `https://api.themoviedb.org/3/tv/${interaction.movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`;
                 }
-                
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.success === false) return null;
                 return {
                   id: parseInt(interaction.movieId),
-                  title: movieData.title,
-                  image: movieData.poster_path ? `https://image.tmdb.org/t/p/w500${movieData.poster_path}` : null,
-                  type: 'movie',
-                  year: movieData.release_date ? movieData.release_date.split('-')[0] : null,
-                  rating: movieData.vote_average
+                  title: data.title || data.name,
+                  image: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
+                  type: interaction.type,
+                  year: (data.release_date || data.first_air_date || '').split('-')[0] || null,
+                  rating: data.vote_average
                 };
               } catch (error) {
-                console.error(`Error fetching movie ${interaction.movieId}:`, error);
+                console.error(`Error fetching ${interaction.type} ${interaction.movieId}:`, error);
                 return null;
               }
             })

@@ -3,12 +3,13 @@ import React, { useState } from 'react';
 interface Props {
   userId: string;
   movieId: number;
+  type: 'movie' | 'tv';
   liked?: boolean;
   watched?: boolean;
   onChange?: (state: { liked: boolean; watched: boolean }) => void;
 }
 
-export default function LikeWatchedButtons({ userId, movieId, liked = false, watched = false, onChange }: Props) {
+export default function LikeWatchedButtons({ userId, movieId, type, liked = false, watched = false, onChange }: Props) {
   const [likeState, setLikeState] = useState(liked);
   const [watchedState, setWatchedState] = useState(watched);
 
@@ -18,7 +19,7 @@ export default function LikeWatchedButtons({ userId, movieId, liked = false, wat
     await fetch('/api/interaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, movieId, liked: newLiked, watched: newWatched }),
+      body: JSON.stringify({ userId, movieId, liked: newLiked, watched: newWatched, type }),
     });
     onChange?.({ liked: newLiked, watched: newWatched });
   };

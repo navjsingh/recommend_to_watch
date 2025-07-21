@@ -31,12 +31,18 @@ model Session {
   expires      DateTime
 }
 
+enum MovieType {
+  movie
+  tv
+}
+
 model Interaction {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id])
   userId    String
   movieId   String
   liked     Boolean
+  type      MovieType
   createdAt DateTime @default(now())
 }
 

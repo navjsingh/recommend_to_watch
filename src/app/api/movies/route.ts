@@ -23,11 +23,13 @@ async function getGenres() {
 function mapMovie(tmdbMovie: any, genres: { movie: Record<number, string>; tv: Record<number, string> }) {
   const isTV = !!tmdbMovie.first_air_date;
   const genreMap = isTV ? genres.tv : genres.movie;
+  let type: 'movie' | 'tv' = 'movie';
+  if (tmdbMovie.media_type === 'tv' || isTV) type = 'tv';
   return {
     id: tmdbMovie.id,
     title: tmdbMovie.title || tmdbMovie.name,
     image: tmdbMovie.poster_path ? TMDB_IMAGE_BASE + tmdbMovie.poster_path : '',
-    type: tmdbMovie.media_type || (isTV ? 'series' : 'movie'),
+    type,
     description: tmdbMovie.overview,
     year: (tmdbMovie.release_date || tmdbMovie.first_air_date || '').slice(0, 4),
     rating: tmdbMovie.vote_average,
